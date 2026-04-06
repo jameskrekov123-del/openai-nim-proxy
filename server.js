@@ -16,7 +16,7 @@ const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.c
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
 // 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
+const SHOW_REASONING = true; // Set to true to show reasoning with <think> tags
 
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = false; // Set to true to enable chat_template_kwargs thinking parameter
@@ -30,6 +30,8 @@ const MODEL_MAPPING = {
   'claude-3-opus': 'openai/gpt-oss-120b',
   'claude-3-sonnet': 'openai/gpt-oss-20b',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking' 
+  'glm-4.7': 'z-ai/glm4_7',          // clean alias you can type in JanitorAI
+'z-ai/glm4_7': 'z-ai/glm4_7',      // direct NVIDIA ID (in case you ever want it)
 };
 
 // Health check endpoint
@@ -122,7 +124,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
-        const lines = buffer.split('\\n');
+       const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         
         lines.forEach(line => {
