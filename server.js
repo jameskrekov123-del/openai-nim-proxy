@@ -29,11 +29,10 @@ const MODEL_MAPPING = {
   'gpt-4o': 'deepseek-ai/deepseek-v3.1',
   'claude-3-opus': 'openai/gpt-oss-120b',
   'claude-3-sonnet': 'openai/gpt-oss-20b',
-  'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking' 
+  'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
   'glm-4.7': 'z-ai/glm4_7',          // clean alias you can type in JanitorAI
-'z-ai/glm4_7': 'z-ai/glm4_7',      // direct NVIDIA ID (in case you ever want it)
+  'z-ai/glm4_7': 'z-ai/glm4_7',      // direct NVIDIA ID
 };
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -129,10 +128,16 @@ app.post('/v1/chat/completions', async (req, res) => {
         
         lines.forEach(line => {
           if (line.startsWith('data: ')) {
-            if (line.includes('[DONE]')) {
-              res.write(line + '\\n');
-              return;
-            }
+        if (line.includes('[DONE]')) {
+  res.write(line + '\n');
+  return;
+}
+...
+res.write(`data: ${JSON.stringify(data)}\n\n`);
+...
+} catch (e) {
+  res.write(line + '\n');
+}
             
             try {
               const data = JSON.parse(line.slice(6));
