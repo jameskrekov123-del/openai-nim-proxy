@@ -182,7 +182,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         console.error('Stream error:', err);
         res.end();
       });
-        } else {
+         } else {
       // Transform NIM response to OpenAI format with reasoning
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
@@ -192,8 +192,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         choices: response.data.choices.map(choice => {
           let fullContent = choice.message?.content || '';
 
-                  let fullContent = choice.message?.content || '';
-
           // Only clean control tokens, preserve all spacing
           fullContent = fullContent
             .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
@@ -202,6 +200,7 @@ app.post('/v1/chat/completions', async (req, res) => {
           if (SHOW_REASONING && choice.message?.reasoning_content) {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
           }
+
           return {
             index: choice.index,
             message: {
