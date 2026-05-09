@@ -120,30 +120,29 @@ app.post('/v1/chat/completions', async (req, res) => {
       responseType: stream ? 'stream' : 'json'
     });
     
-       if (stream) {
+              if (stream) {
       // Handle streaming response with reasoning
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
-     
+    
       let buffer = '';
-      let reasoningStarted = false;
-     
+    
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-       
+      
         lines.forEach(line => {
           if (line.startsWith('data: ')) {
             if (line.includes('[DONE]')) {
               res.write(line + '\n');
               return;
             }
-           
+          
             try {
               const data = JSON.parse(line.slice(6));
-                           if (data.choices?.[0]?.delta) {
+              if (data.choices?.[0]?.delta) {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content;
 
@@ -155,11 +154,10 @@ app.post('/v1/chat/completions', async (req, res) => {
 
                 if (SHOW_REASONING) {
                   if (reasoning) {
-                    // Use separate reasoning_content field (GLM style)
+                    // GLM style separate reasoning
                     content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
                   } else if (content.includes('<think>')) {
-                    // DeepSeek V4 already outputs native <think> tags
-                    // Do nothing - keep as is
+                    // DeepSeek V4 native <think> tags — keep as is
                   }
                 }
 
@@ -168,15 +166,20 @@ app.post('/v1/chat/completions', async (req, res) => {
                   delete data.choices[0].delta.reasoning_content;
                 }
               }
+              res.write(`data: ${JSON.stringify(data)}\n\n`);
+            } catch (e) {
+              res.write(line + '\n');
+            }
+          }
         });
       });
-     
+    
       response.data.on('end', () => res.end());
       response.data.on('error', (err) => {
         console.error('Stream error:', err);
         res.end();
       });
-      } else {
+    } else {
       // Transform NIM response to OpenAI format with reasoning
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
