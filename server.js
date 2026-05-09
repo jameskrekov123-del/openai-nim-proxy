@@ -147,24 +147,21 @@ app.post('/v1/chat/completions', async (req, res) => {
           
             try {
               const data = JSON.parse(line.slice(6));
-                          if (data.choices?.[0]?.delta) {
+                                        if (data.choices?.[0]?.delta) {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content || '';
 
-                // Clean control tokens
+                // Clean only control tokens, do NOT trim aggressively
                 content = content
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
                   .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
-                  .trim();
+                  .replace(/^\s+|\s+$/g, '');   // Soft trim only start/end of this chunk
 
                 if (SHOW_REASONING) {
                   if (reasoning) {
                     content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
-                  } 
-                  // DeepSeek V4 often puts thinking directly in content
-                  else if (content.match(/thinking|reasoning|let me think|<think>/i)) {
-                    // Optional: wrap obvious thinking parts if they aren't already tagged
-                    content = content.replace(/(^|\n)([Ll]et me think|[Rr]easoning:.*)/, '<think>\n$2\n</think>\n\n');
+                  } else if (content.includes('<think>') || content.includes('</think>')) {
+                    // Keep native V4 thinking as is
                   }
                 }
 
@@ -197,15 +194,16 @@ app.post('/v1/chat/completions', async (req, res) => {
           let fullContent = choice.message?.content || '';
 
           // === CLEAN CONTROL TOKENS (this is the second thing) ===
+                   let fullContent = choice.message?.content || '';
+
+          // Clean control tokens but preserve spacing
           fullContent = fullContent
             .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
-            .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
-            .trim();
+            .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
 
           if (SHOW_REASONING && choice.message?.reasoning_content) {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
           }
-
           return {
             index: choice.index,
             message: {
