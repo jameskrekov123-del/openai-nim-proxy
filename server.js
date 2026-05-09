@@ -101,14 +101,19 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
     
-    // Transform OpenAI request to NIM format
+        // Transform OpenAI request to NIM format
     const nimRequest = {
       model: nimModel,
       messages: messages,
-      temperature: temperature || 0.6,
-      max_tokens: max_tokens || 9024,
-      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
-      stream: stream || false
+      temperature: temperature || 0.7,
+      max_tokens: max_tokens || 4096,
+      stream: stream || false,
+      
+      // Stronger thinking parameters for DeepSeek V4
+      extra_body: ENABLE_THINKING_MODE ? {
+        chat_template_kwargs: { thinking: true },
+        reasoning_effort: "high"          // ← Added this
+      } : undefined
     };
     
     // Make request to NVIDIA NIM API
@@ -142,9 +147,9 @@ app.post('/v1/chat/completions', async (req, res) => {
           
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta) {
+                          if (data.choices?.[0]?.delta) {
                 let content = data.choices[0].delta.content || '';
-                const reasoning = data.choices[0].delta.reasoning_content;
+                const reasoning = data.choices[0].delta.reasoning_content || '';
 
                 // Clean control tokens
                 content = content
@@ -154,10 +159,12 @@ app.post('/v1/chat/completions', async (req, res) => {
 
                 if (SHOW_REASONING) {
                   if (reasoning) {
-                    // GLM style separate reasoning
                     content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
-                  } else if (content.includes('<think>')) {
-                    // DeepSeek V4 native <think> tags — keep as is
+                  } 
+                  // DeepSeek V4 often puts thinking directly in content
+                  else if (content.match(/thinking|reasoning|let me think|<think>/i)) {
+                    // Optional: wrap obvious thinking parts if they aren't already tagged
+                    content = content.replace(/(^|\n)([Ll]et me think|[Rr]easoning:.*)/, '<think>\n$2\n</think>\n\n');
                   }
                 }
 
