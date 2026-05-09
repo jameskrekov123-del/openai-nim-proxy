@@ -110,10 +110,10 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream: stream || false,
       
       // Stronger thinking parameters for DeepSeek V4
-      extra_body: ENABLE_THINKING_MODE ? {
-        chat_template_kwargs: { thinking: true },
-        reasoning_effort: "high"          // ← Added this
-      } : undefined
+       extra_body: ENABLE_THINKING_MODE ? {
+     chat_template_kwargs: { thinking: true },
+     reasoning_effort: "max"     // Changed from "high" to "max"
+   } : undefined
     };
     
     // Make request to NVIDIA NIM API
