@@ -182,7 +182,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         console.error('Stream error:', err);
         res.end();
       });
-         } else {
+             } else {
       // Transform NIM response to OpenAI format with reasoning
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
