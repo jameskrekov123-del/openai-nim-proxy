@@ -31,13 +31,13 @@ const MODEL_MAPPING = {
   'claude-3-sonnet': 'openai/gpt-oss-20b',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
 
-  // GLM-4.7 fallback (will stop working soon)
-  'glm-4.7': 'deepseek-ai/deepseek-v4-pro',
-  'z-ai/glm4_7': 'deepseek-ai/deepseek-v4-pro',
+  // GLM-4.7 (for its final days)
+  'glm-4.7': 'z-ai/glm4_7',
+  'z-ai/glm4_7': 'z-ai/glm4_7',
 
-  // DeepSeek V4 Models (Recommended)
+  // DeepSeek V4 Models
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
-  'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',   // Faster & more stable right now
+  'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
   'v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'v4-flash': 'deepseek-ai/deepseek-v4-flash'
 };
@@ -143,45 +143,31 @@ app.post('/v1/chat/completions', async (req, res) => {
            
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta) {
+                           if (data.choices?.[0]?.delta) {
+                let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content;
-                const content = data.choices[0].delta.content;
-               
+
+                // Clean control tokens
+                content = content
+                  .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
+                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
+                  .trim();
+
                 if (SHOW_REASONING) {
-                  let combinedContent = '';
-                 
-                  if (reasoning && !reasoningStarted) {
-                    combinedContent = '<think>\n' + reasoning;
-                    reasoningStarted = true;
-                  } else if (reasoning) {
-                    combinedContent = reasoning;
+                  if (reasoning) {
+                    // Use separate reasoning_content field (GLM style)
+                    content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
+                  } else if (content.includes('<think>')) {
+                    // DeepSeek V4 already outputs native <think> tags
+                    // Do nothing - keep as is
                   }
-                 
-                  if (content && reasoningStarted) {
-                    combinedContent += '</think>\n\n' + content;
-                    reasoningStarted = false;
-                  } else if (content) {
-                    combinedContent += content;
-                  }
-                 
-                  if (combinedContent) {
-                    data.choices[0].delta.content = combinedContent;
-                    delete data.choices[0].delta.reasoning_content;
-                  }
-                } else {
-                  if (content) {
-                    data.choices[0].delta.content = content;
-                  } else {
-                    data.choices[0].delta.content = '';
-                  }
+                }
+
+                data.choices[0].delta.content = content;
+                if (data.choices[0].delta.reasoning_content) {
                   delete data.choices[0].delta.reasoning_content;
                 }
               }
-              res.write(`data: ${JSON.stringify(data)}\n\n`);
-            } catch (e) {
-              res.write(line + '\n');
-            }
-          }
         });
       });
      
