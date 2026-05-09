@@ -147,21 +147,20 @@ app.post('/v1/chat/completions', async (req, res) => {
           
             try {
               const data = JSON.parse(line.slice(6));
-                                        if (data.choices?.[0]?.delta) {
+                                             if (data.choices?.[0]?.delta) {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content || '';
 
-                // Clean only control tokens, do NOT trim aggressively
+                // Only remove control tokens — be very gentle with spacing
                 content = content
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
-                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
-                  .replace(/^\s+|\s+$/g, '');   // Soft trim only start/end of this chunk
+                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
 
                 if (SHOW_REASONING) {
                   if (reasoning) {
                     content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
                   } else if (content.includes('<think>') || content.includes('</think>')) {
-                    // Keep native V4 thinking as is
+                    // Keep native thinking as is
                   }
                 }
 
@@ -193,7 +192,9 @@ app.post('/v1/chat/completions', async (req, res) => {
         choices: response.data.choices.map(choice => {
           let fullContent = choice.message?.content || '';
 
-          // Clean control tokens but preserve spacing
+                  let fullContent = choice.message?.content || '';
+
+          // Only clean control tokens, preserve all spacing
           fullContent = fullContent
             .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
             .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
@@ -201,7 +202,6 @@ app.post('/v1/chat/completions', async (req, res) => {
           if (SHOW_REASONING && choice.message?.reasoning_content) {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
           }
-
           return {
             index: choice.index,
             message: {
