@@ -16,12 +16,12 @@ const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.c
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
 // 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = true; // Set to true to show reasoning with <think> tags
+const SHOW_REASONING = true;
 
-// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = false; // Set to true to enable chat_template_kwargs thinking parameter
+// 🔥 THINKING MODE TOGGLE - Very important for DeepSeek V4
+const ENABLE_THINKING_MODE = true;   // ← Changed to true
 
-// Model mapping (adjust based on available NIM models)
+// Model mapping
 const MODEL_MAPPING = {
   'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
   'gpt-4': 'qwen/qwen3-coder-480b-a35b-instruct',
@@ -30,8 +30,16 @@ const MODEL_MAPPING = {
   'claude-3-opus': 'openai/gpt-oss-120b',
   'claude-3-sonnet': 'openai/gpt-oss-20b',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
-  'glm-4.7': 'z-ai/glm4_7',          // clean alias you can type in JanitorAI
-  'z-ai/glm4_7': 'z-ai/glm4_7',      // direct NVIDIA ID
+
+  // GLM-4.7 fallback (will stop working soon)
+  'glm-4.7': 'deepseek-ai/deepseek-v4-pro',
+  'z-ai/glm4_7': 'deepseek-ai/deepseek-v4-pro',
+
+  // DeepSeek V4 Models (Recommended)
+  'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
+  'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',   // Faster & more stable right now
+  'v4-pro': 'deepseek-ai/deepseek-v4-pro',
+  'v4-flash': 'deepseek-ai/deepseek-v4-flash'
 };
 // Health check endpoint
 app.get('/health', (req, res) => {
