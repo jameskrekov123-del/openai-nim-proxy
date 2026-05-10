@@ -33,7 +33,7 @@ const MODEL_MAPPING = {
   'glm-4.7': 'z-ai/glm4_7',
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
-  'glm-5.1': 'z-ai/glm-5.1'
+  'glm-5.1': 'z-ai/glm-5.1',
   'v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'v4-flash': 'deepseek-ai/deepseek-v4-flash'
 };
