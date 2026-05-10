@@ -33,6 +33,7 @@ const MODEL_MAPPING = {
   'glm-4.7': 'z-ai/glm4_7',
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
+  'glm-5.1': 'z-ai/glm-5.1'
   'v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'v4-flash': 'deepseek-ai/deepseek-v4-flash'
 };
@@ -60,23 +61,40 @@ app.get('/v1/models', (req, res) => {
 // Chat completions
 app.post('/v1/chat/completions', async (req, res) => {
   try {
-    const { model, messages, temperature, max_tokens, stream } = req.body;
+    let { model, messages, temperature, max_tokens, stream } = req.body;
     let nimModel = MODEL_MAPPING[model] || model;
 
-   const nimRequest = {
+    // --- REASONING RECONSTRUCTION ---
+    // This looks at previous messages. If it finds a <think> block, 
+    // it moves it to reasoning_content so the model doesn't get confused.
+    const processedMessages = messages.map(msg => {
+      if (msg.role === 'assistant' && msg.content && msg.content.includes('<think>')) {
+        const parts = msg.content.split('</think>');
+        return {
+          role: 'assistant',
+          content: parts[1]?.trim() || '',
+          reasoning_content: parts[0].replace('<think>', '').trim()
+        };
+      }
+      return msg;
+    });
+
+    const nimRequest = {
       model: nimModel,
-      messages: messages,
-      temperature: temperature || 0.7,
-      max_tokens: max_tokens || 4096,
+      messages: processedMessages,
+      temperature: temperature || 0.8, // Note: Ignored by V4 when thinking
+      max_tokens: max_tokens || 8192,  // Bumped default for long RP posts
       stream: stream || false,
-      // We use the spread operator (...) to inject these directly into the root of the request
       ...(ENABLE_THINKING_MODE && {
         chat_template_kwargs: { 
           thinking: true,
-          reasoning_effort: "max" 
+          // "high" is better for RP than "max". Max is for math/coding.
+          reasoning_effort: "high" 
         }
       })
     };
+
+    // ... rest of your axios call and streaming logic ...
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
