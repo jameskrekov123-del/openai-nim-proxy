@@ -63,20 +63,20 @@ app.post('/v1/chat/completions', async (req, res) => {
     const { model, messages, temperature, max_tokens, stream } = req.body;
     let nimModel = MODEL_MAPPING[model] || model;
 
-    const nimRequest = {
+   const nimRequest = {
       model: nimModel,
       messages: messages,
       temperature: temperature || 0.7,
       max_tokens: max_tokens || 4096,
       stream: stream || false,
-      extra_body: ENABLE_THINKING_MODE ? {
+      // We use the spread operator (...) to inject these directly into the root of the request
+      ...(ENABLE_THINKING_MODE && {
         chat_template_kwargs: { 
           thinking: true,
           reasoning_effort: "max" 
         }
-      } : undefined
+      })
     };
-
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
