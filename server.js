@@ -109,11 +109,13 @@ app.post('/v1/chat/completions', async (req, res) => {
       max_tokens: max_tokens || 4096,
       stream: stream || false,
       
-      // Stronger thinking parameters for DeepSeek V4
-       extra_body: ENABLE_THINKING_MODE ? {
-     chat_template_kwargs: { thinking: true },
-     reasoning_effort: "max"     // Changed from "high" to "max"
-   } : undefined
+// Stronger thinking parameters for DeepSeek V4
+      extra_body: ENABLE_THINKING_MODE ? {
+        chat_template_kwargs: { 
+          thinking: true,
+          reasoning_effort: "max" 
+        }
+      } : undefined
     };
     
     // Make request to NVIDIA NIM API
@@ -131,8 +133,10 @@ app.post('/v1/chat/completions', async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
     
-      let buffer = '';
-    
+let buffer = '';
+      let isThinking = false; // Add this line here!
+
+      response.data.on('data', (chunk) => {
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
         const lines = buffer.split('\n');
@@ -156,10 +160,24 @@ app.post('/v1/chat/completions', async (req, res) => {
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
                   .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
 
-                if (SHOW_REASONING) {
+              if (SHOW_REASONING) {
                   if (reasoning) {
-                    content = '<think>\n' + reasoning + '\n</think>\n\n' + content;
+                    if (!isThinking) {
+                      // First reasoning chunk: open the tag
+                      isThinking = true;
+                      content = '<think>\n' + reasoning;
+                    } else {
+                      // Middle reasoning chunks: just stream the text
+                      content = reasoning;
+                    }
+                  } else if (isThinking && content) {
+                    // Reasoning is finished, close the tag before the normal reply
+                    isThinking = false;
+                    content = '\n</think>\n\n' + content;
                   } else if (content.includes('<think>') || content.includes('</think>')) {
+                    // Keep native thinking as is
+                  }
+                }
                     // Keep native thinking as is
                   }
                 }
