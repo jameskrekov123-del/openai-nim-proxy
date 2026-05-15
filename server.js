@@ -33,59 +33,36 @@ const MODEL_MAPPING = {
   'glm-5.1': 'z-ai/glm-5.1',
   'z-ai/glm-5.1': 'z-ai/glm-5.1',
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
-  'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
-  'v4-pro': 'deepseek-ai/deepseek-v4-pro',
-  'v4-flash': 'deepseek-ai/deepseek-v4-flash'
+  'v4-pro': 'deepseek-ai/deepseek-v4-pro'
 };
-
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    reasoning_display: SHOW_REASONING,
-    thinking_mode: ENABLE_THINKING_MODE 
-  });
-});
-
-app.get('/v1/models', (req, res) => {
-  const models = Object.keys(MODEL_MAPPING).map(model => ({
-    id: model,
-    object: 'model',
-    created: Date.now(),
-    owned_by: 'nvidia-nim-proxy'
-  }));
-  res.json({ object: 'list', data: models });
-});
 
 app.post('/v1/chat/completions', async (req, res) => {
   try {
     let { model, messages, temperature, max_tokens, stream } = req.body;
-    
     let nimModel = MODEL_MAPPING[model] || model;
 
-    // Pass messages through without aggressive splitting to preserve natural paragraphs
-    const processedMessages = messages;
+    // Injection to force paragraphs for GLM-5.1
+    const processedMessages = messages.map((msg, index) => {
+        if (index === messages.length - 1 && msg.role === 'user') {
+            return { ...msg, content: msg.content + "\n\n(Format your response with clear double-spaced paragraphs. Do not use a wall of text.)" };
+        }
+        return msg;
+    });
 
     const nimRequest = {
       model: nimModel,
       messages: processedMessages,
-      temperature: temperature || 0.7,
+      temperature: temperature || 0.8,
       max_tokens: max_tokens || 8192,
       stream: stream || false,
-      
-      // Let the proxy handle the tags instead of forcing NIM to do it natively
       ...(ENABLE_THINKING_MODE && {
-        chat_template_kwargs: { 
-          enable_thinking: true
-        },
+        chat_template_kwargs: { enable_thinking: true, clear_thinking: false },
         reasoning_effort: "medium" 
       })
     };
 
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
-      headers: {
-        'Authorization': `Bearer ${NIM_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${NIM_API_KEY}`, 'Content-Type': 'application/json' },
       responseType: stream ? 'stream' : 'json',
       timeout: 300000, 
       httpAgent: new http.Agent({ keepAlive: true }),
@@ -94,11 +71,9 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-
       let buffer = '';
       let isThinking = false;
+      let hasStartedDialogue = false;
 
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
@@ -107,91 +82,67 @@ app.post('/v1/chat/completions', async (req, res) => {
 
         lines.forEach(line => {
           if (line.startsWith('data: ')) {
-            if (line.includes('[DONE]')) {
-              res.write(line + '\n');
-              return;
-            }
+            if (line.includes('[DONE]')) { res.write(line + '\n'); return; }
 
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta) {
-                let content = data.choices[0].delta.content || '';
-                let reasoning = data.choices[0].delta.reasoning_content || '';
-                let finalChunk = '';
+              const delta = data.choices[0].delta;
+              let content = delta.content || '';
+              let reasoning = delta.reasoning_content || '';
+              let finalOutput = '';
 
-                // Sequentially process reasoning and content to avoid collisions
-                if (SHOW_REASONING) {
-                  if (reasoning) {
-                    if (!isThinking) {
-                      isThinking = true;
-                      finalChunk += '<think>\n';
-                    }
-                    finalChunk += reasoning;
+              if (SHOW_REASONING) {
+                // 1. Handle incoming reasoning stream
+                if (reasoning) {
+                  if (!isThinking) {
+                    isThinking = true;
+                    finalOutput += '<think>\n';
                   }
-                  
-                  // Trigger the closing tag the moment reasoning stops and content begins
-                  if (isThinking && content && !reasoning) {
-                    isThinking = false;
-                    finalChunk += '\n</think>\n\n';
-                  }
+                  finalOutput += reasoning;
                 }
-
-                finalChunk += content;
-
-                // Strip internal system tags just in case
-                finalChunk = finalChunk
-                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
-
-                data.choices[0].delta.content = finalChunk;
-                if (data.choices[0].delta.reasoning_content) delete data.choices[0].delta.reasoning_content;
+                
+                // 2. Transition from reasoning to dialogue
+                if (isThinking && content && !reasoning) {
+                  isThinking = false;
+                  hasStartedDialogue = true;
+                  finalOutput += '\n</think>\n\n';
+                }
               }
-              res.write(`data: ${JSON.stringify(data)}\n\n`);
-            } catch (e) {
-              res.write(line + '\n');
-            }
+
+              // 3. HARD FILTER: Prevent the model from typing its own <think> tags in the dialogue
+              if (content) {
+                let cleanContent = content
+                  .replace(/<think>|<\/think>/gi, '') // Wipe leaked tags
+                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
+                
+                finalOutput += cleanContent;
+              }
+
+              if (finalOutput) {
+                data.choices[0].delta.content = finalOutput;
+                delete data.choices[0].delta.reasoning_content;
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+              }
+            } catch (e) {}
           }
         });
       });
-
       response.data.on('end', () => res.end());
-      response.data.on('error', (err) => {
-        console.error('Stream error:', err);
-        res.end();
-      });
     } else {
-      const openaiResponse = {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: model,
-        choices: response.data.choices.map(choice => {
-          let fullContent = choice.message?.content || '';
-          if (SHOW_REASONING && choice.message?.reasoning_content) {
-            fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
-          }
-          return {
-            index: choice.index,
-            message: { role: choice.message.role, content: fullContent },
-            finish_reason: choice.finish_reason
-          };
-        }),
-        usage: response.data.usage || {}
-      };
-      res.json(openaiResponse);
+        // Non-streaming logic (standardized)
+        let choice = response.data.choices[0];
+        let fullText = choice.message.content.replace(/<think>|<\/think>/gi, '');
+        if (SHOW_REASONING && choice.message.reasoning_content) {
+            fullText = `<think>\n${choice.message.reasoning_content}\n</think>\n\n${fullText}`;
+        }
+        res.json({
+            ...response.data,
+            choices: [{ ...choice, message: { ...choice.message, content: fullText } }]
+        });
     }
   } catch (error) {
-    console.error('Proxy error:', error.message);
-    res.status(error.response?.status || 500).json({
-      error: { message: error.message || 'Internal server error' }
-    });
+    res.status(500).json({ error: { message: error.message } });
   }
 });
 
-app.all('*', (req, res) => {
-  res.status(404).json({ error: { message: `Endpoint ${req.path} not found` }});
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`OpenAI to NVIDIA NIM Proxy running on port ${PORT}`);
-  console.log(`Thinking mode: ${ENABLE_THINKING_MODE ? 'ENABLED' : 'DISABLED'}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`Proxy active on ${PORT}`));
