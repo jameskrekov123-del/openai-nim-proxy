@@ -2,8 +2,8 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const http = require('http');     // Added to fix 504 timeouts
-const https = require('https');   // Added to fix 504 timeouts
+const http = require('http');
+const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -30,8 +30,8 @@ const MODEL_MAPPING = {
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
   'glm-4.7': 'z-ai/glm4_7',
   'z-ai/glm4_7': 'z-ai/glm4_7',
-  'glm-5.1': 'z-ai/glm-5.1',        // Added GLM 5.1
-  'z-ai/glm-5.1': 'z-ai/glm-5.1',   // Added GLM 5.1
+  'glm-5.1': 'z-ai/glm-5.1',
+  'z-ai/glm-5.1': 'z-ai/glm-5.1',
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
   'v4-pro': 'deepseek-ai/deepseek-v4-pro',
@@ -62,9 +62,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     
     let nimModel = MODEL_MAPPING[model] || model;
 
-    // FIXED: Removed the aggressive split('<think>') logic. 
-    // This allows the raw text and natural paragraphs to pass through untouched,
-    // fixing the "Wall of Text" issue.
+    // Pass messages through without aggressive splitting to preserve natural paragraphs
     const processedMessages = messages;
 
     const nimRequest = {
@@ -74,25 +72,22 @@ app.post('/v1/chat/completions', async (req, res) => {
       max_tokens: max_tokens || 8192,
       stream: stream || false,
       
-      // FIXED: Best current thinking parameters for GLM-5.1 and DeepSeek V4
+      // Let the proxy handle the tags instead of forcing NIM to do it natively
       ...(ENABLE_THINKING_MODE && {
         chat_template_kwargs: { 
-          enable_thinking: true,
-          clear_thinking: false,    // Forces the reasoning to stay visible
-          thinking_format: "xml"    // Forces standard XML tags
+          enable_thinking: true
         },
-        reasoning_effort: "medium"  // Lowered from 'high' to prevent 504 timeouts
+        reasoning_effort: "medium" 
       })
     };
 
-    // FIXED: Added Keep-Alive agents and a 5-minute timeout to stop Axios from giving up
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
         'Content-Type': 'application/json'
       },
       responseType: stream ? 'stream' : 'json',
-      timeout: 300000, // 5 minute timeout
+      timeout: 300000, 
       httpAgent: new http.Agent({ keepAlive: true }),
       httpsAgent: new https.Agent({ keepAlive: true })
     });
@@ -121,27 +116,33 @@ app.post('/v1/chat/completions', async (req, res) => {
               const data = JSON.parse(line.slice(6));
               if (data.choices?.[0]?.delta) {
                 let content = data.choices[0].delta.content || '';
-                const reasoning = data.choices[0].delta.reasoning_content || '';
+                let reasoning = data.choices[0].delta.reasoning_content || '';
+                let finalChunk = '';
 
-                content = content
-                  .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
-                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
-
+                // Sequentially process reasoning and content to avoid collisions
                 if (SHOW_REASONING) {
                   if (reasoning) {
                     if (!isThinking) {
                       isThinking = true;
-                      content = '<think>\n' + reasoning;
-                    } else {
-                      content = reasoning;
+                      finalChunk += '<think>\n';
                     }
-                  } else if (isThinking && content) {
+                    finalChunk += reasoning;
+                  }
+                  
+                  // Trigger the closing tag the moment reasoning stops and content begins
+                  if (isThinking && content && !reasoning) {
                     isThinking = false;
-                    content = '\n</think>\n\n' + content;
+                    finalChunk += '\n</think>\n\n';
                   }
                 }
 
-                data.choices[0].delta.content = content;
+                finalChunk += content;
+
+                // Strip internal system tags just in case
+                finalChunk = finalChunk
+                  .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
+
+                data.choices[0].delta.content = finalChunk;
                 if (data.choices[0].delta.reasoning_content) delete data.choices[0].delta.reasoning_content;
               }
               res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -158,7 +159,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         res.end();
       });
     } else {
-      // Non-streaming
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
