@@ -86,7 +86,7 @@ app.post('/v1/chat/completions', async (req, res) => {
           clear_thinking: true,
           do_sample: true
         },
-        reasoning_effort: "high"
+        reasoning_effort: "medium"
       })
     };
 
