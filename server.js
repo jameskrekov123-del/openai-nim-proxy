@@ -2,6 +2,8 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const http = require('http');     // Added to fix 504 timeouts
+const https = require('https');   // Added to fix 504 timeouts
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -28,6 +30,8 @@ const MODEL_MAPPING = {
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
   'glm-4.7': 'z-ai/glm4_7',
   'z-ai/glm4_7': 'z-ai/glm4_7',
+  'glm-5.1': 'z-ai/glm-5.1',        // Added GLM 5.1
+  'z-ai/glm-5.1': 'z-ai/glm-5.1',   // Added GLM 5.1
   'deepseek-v4-pro': 'deepseek-ai/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek-ai/deepseek-v4-flash',
   'v4-pro': 'deepseek-ai/deepseek-v4-pro',
@@ -58,18 +62,10 @@ app.post('/v1/chat/completions', async (req, res) => {
     
     let nimModel = MODEL_MAPPING[model] || model;
 
-    // Process previous assistant messages to separate thinking
-    const processedMessages = messages.map(msg => {
-      if (msg.role === 'assistant' && typeof msg.content === 'string' && msg.content.includes('<think>')) {
-        const parts = msg.content.split('</think>');
-        return {
-          role: 'assistant',
-          content: parts[1]?.trim() || '',
-          reasoning_content: parts[0].replace('<think>', '').trim()
-        };
-      }
-      return msg;
-    });
+    // FIXED: Removed the aggressive split('<think>') logic. 
+    // This allows the raw text and natural paragraphs to pass through untouched,
+    // fixing the "Wall of Text" issue.
+    const processedMessages = messages;
 
     const nimRequest = {
       model: nimModel,
@@ -78,24 +74,27 @@ app.post('/v1/chat/completions', async (req, res) => {
       max_tokens: max_tokens || 8192,
       stream: stream || false,
       
-      // Best current thinking parameters for DeepSeek V4
+      // FIXED: Best current thinking parameters for GLM-5.1 and DeepSeek V4
       ...(ENABLE_THINKING_MODE && {
         chat_template_kwargs: { 
-          thinking: true,
           enable_thinking: true,
-          clear_thinking: true,
-          do_sample: true
+          clear_thinking: false,    // Forces the reasoning to stay visible
+          thinking_format: "xml"    // Forces standard XML tags
         },
-        reasoning_effort: "medium"
+        reasoning_effort: "medium"  // Lowered from 'high' to prevent 504 timeouts
       })
     };
 
+    // FIXED: Added Keep-Alive agents and a 5-minute timeout to stop Axios from giving up
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      responseType: stream ? 'stream' : 'json'
+      responseType: stream ? 'stream' : 'json',
+      timeout: 300000, // 5 minute timeout
+      httpAgent: new http.Agent({ keepAlive: true }),
+      httpsAgent: new https.Agent({ keepAlive: true })
     });
 
     if (stream) {
