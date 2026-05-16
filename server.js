@@ -97,7 +97,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       responseType: stream ? 'stream' : 'json'
     });
 
-     if (stream) {
+      if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -124,7 +124,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content || '';
 
-                // Clean control tokens
+                // Clean tokens
                 content = content
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
                   .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
@@ -143,12 +143,13 @@ app.post('/v1/chat/completions', async (req, res) => {
                   }
                 }
 
-                // Gentle paragraphing - only fix bad walls of text
+                // Gentle, natural paragraphing
                 content = content
                   .replace(/\n{3,}/g, '\n\n')                    // Normalize excessive newlines
-                  .replace(/([.!?])\s{1,2}([A-Z])/g, '$1\n\n$2'); // Add paragraph break after sentence + capital letter
+                  .replace(/([.!?])\s{2,}([A-Z])/g, '$1\n\n$2')  // Only break on clear sentence + capital
+                  .replace(/([.!?]\s)([A-Z])/g, '$1\n$2');       // Single newline after most sentences
 
-                data.choices[0].delta.content = content;
+                data.choices[0].delta.content = content.trim();
                 if (data.choices[0].delta.reasoning_content) {
                   delete data.choices[0].delta.reasoning_content;
                 }
