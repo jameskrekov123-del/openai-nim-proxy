@@ -97,7 +97,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       responseType: stream ? 'stream' : 'json'
     });
 
-       if (stream) {
+    if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -124,13 +124,12 @@ app.post('/v1/chat/completions', async (req, res) => {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content || '';
 
-                // Clean tokens
+                // Minimal cleaning only
                 content = content
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
                   .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
 
                 if (SHOW_REASONING) {
-                  // Case 1: Separate reasoning_content field
                   if (reasoning) {
                     if (!isThinking) {
                       isThinking = true;
@@ -138,14 +137,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                     } else {
                       content = reasoning + content;
                     }
-                  } 
-                  // Case 2: Model already put <think> in the content
-                  else if (content.includes('<think>') || content.includes('</think>')) {
-                    // Keep as is
-                  }
-                  // Case 3: Try to detect raw thinking at the beginning
-                  else if (content.match(/^(I |Let me|Thinking|Analyzing|The situation)/i)) {
-                    content = '<think>\n' + content + '\n</think>\n\n';
+                  } else if (isThinking && content) {
+                    isThinking = false;
+                    content = '\n</think>\n\n' + content;
                   }
                 }
 
