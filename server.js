@@ -21,9 +21,6 @@ const SHOW_REASONING = true;
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = true;
 
-// Helper: add paragraph breaks to wall-of-text responses
-function addParagraphBreaks(text) {
-  if (!text) return text;
   // Insert double newline between sentences followed by a capital letter
   return text.replace(/([.!?][`'"]?)\s+([A-Z`])/g, '$1\n\n$2');
 }
@@ -149,7 +146,6 @@ app.post('/v1/chat/completions', async (req, res) => {
 
                 // Apply paragraph formatting to content
                 if (content) {
-                  content = addParagraphBreaks(content);
                 }
 
                 if (SHOW_REASONING) {
@@ -213,7 +209,6 @@ app.post('/v1/chat/completions', async (req, res) => {
           let fullContent = choice.message?.content || '';
 
           // Apply paragraph formatting
-          fullContent = addParagraphBreaks(fullContent);
 
           if (SHOW_REASONING && choice.message?.reasoning_content) {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
