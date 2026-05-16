@@ -197,6 +197,8 @@ app.post('/v1/chat/completions', async (req, res) => {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
           }
 
+          fullContent = fullContent.replace(/<\/?think>/g, '');
+
           return {
             index: choice.index,
             message: { role: choice.message.role, content: fullContent },
