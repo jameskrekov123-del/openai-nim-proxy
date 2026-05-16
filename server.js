@@ -159,6 +159,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                   }
 
                   if (combinedContent) {
+                    combinedContent = combinedContent.replace(/<\/think>/g, '').replace(/<think>/g, '');
                     data.choices[0].delta.content = combinedContent;
                   }
                 } else {
