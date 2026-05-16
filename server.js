@@ -15,15 +15,8 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
-// 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
 const SHOW_REASONING = true;
-
-// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = true;
-
-  // Insert double newline between sentences followed by a capital letter
-  return text.replace(/([.!?][`'"]?)\s+([A-Z`])/g, '$1\n\n$2');
-}
 
 // Model mapping
 const MODEL_MAPPING = {
@@ -130,7 +123,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         lines.forEach(line => {
           if (line.startsWith('data: ')) {
             if (line.includes('[DONE]')) {
-              // If stream ends with thinking still open, close it
               if (reasoningStarted && !thinkingClosed) {
                 res.write(`data: {"choices":[{"delta":{"content":"\\n</think>\\n\\n"},"index":0}]}\n\n`);
               }
@@ -144,14 +136,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                 let reasoning = data.choices[0].delta.reasoning_content;
                 let content = data.choices[0].delta.content;
 
-                // Apply paragraph formatting to content
-                if (content) {
-                }
-
                 if (SHOW_REASONING) {
                   let combinedContent = '';
 
-                  // Case 1: reasoning_content field is populated
                   if (reasoning && !reasoningStarted) {
                     combinedContent = '<think>\n' + reasoning;
                     reasoningStarted = true;
@@ -167,16 +154,14 @@ app.post('/v1/chat/completions', async (req, res) => {
                     combinedContent += content;
                   }
 
-                  // Case 2: thinking is embedded inside content as <think> tags already
                   if (!reasoning && content && content.includes('<think>')) {
-                    combinedContent = content; // pass through as-is
+                    combinedContent = content;
                   }
 
                   if (combinedContent) {
                     data.choices[0].delta.content = combinedContent;
                   }
                 } else {
-                  // Hide reasoning - strip both reasoning_content and <think> blocks
                   data.choices[0].delta.content = content
                     ? content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
                     : '';
@@ -199,7 +184,6 @@ app.post('/v1/chat/completions', async (req, res) => {
       });
 
     } else {
-      // Non-streaming
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
@@ -207,8 +191,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         model: model,
         choices: response.data.choices.map(choice => {
           let fullContent = choice.message?.content || '';
-
-          // Apply paragraph formatting
 
           if (SHOW_REASONING && choice.message?.reasoning_content) {
             fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
