@@ -97,13 +97,12 @@ app.post('/v1/chat/completions', async (req, res) => {
       responseType: stream ? 'stream' : 'json'
     });
 
-    if (stream) {
+       if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
       let buffer = '';
-      let isThinking = false;
 
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
@@ -124,22 +123,16 @@ app.post('/v1/chat/completions', async (req, res) => {
                 let content = data.choices[0].delta.content || '';
                 const reasoning = data.choices[0].delta.reasoning_content || '';
 
-                // Minimal cleaning only
+                // Clean only bad tokens
                 content = content
                   .replace(/<\|start_header_id\|>assistant<\|end_header_id\|>/g, '')
                   .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
 
                 if (SHOW_REASONING) {
                   if (reasoning) {
-                    if (!isThinking) {
-                      isThinking = true;
-                      content = '<think>\n' + reasoning.trim() + '\n</think>\n\n' + content;
-                    } else {
-                      content = reasoning + content;
-                    }
-                  } else if (isThinking && content) {
-                    isThinking = false;
-                    content = '\n</think>\n\n' + content;
+                    content = '<think>\n' + reasoning.trim() + '\n</think>\n\n' + content;
+                  } else if (content.includes('<think>')) {
+                    // Already has thinking - keep as is
                   }
                 }
 
