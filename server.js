@@ -92,8 +92,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
     
-    // Transform OpenAI request to NIM format
-    const nimRequest = {
+        // Transform OpenAI request to NIM format
     const nimRequest = {
       model: nimModel,
       messages: messages,
@@ -105,8 +104,8 @@ app.post('/v1/chat/completions', async (req, res) => {
           clear_thinking: false
         } 
       } : undefined,
-      stream: stream || false   // <-- add this
-    };                          // <-- close the object here
+      stream: stream || false
+    };
     
     // Make request to NVIDIA NIM API
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
