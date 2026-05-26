@@ -20,7 +20,7 @@ const ENABLE_THINKING_MODE = true;
 
 // Model mapping
 const MODEL_MAPPING = {
-  'glm-4.7': 'zai-org/GLM-4.7:novita',
+  'glm-5.1': 'z-ai/glm-5.1',
 };
 app.get('/health', (req, res) => {
   res.json({
