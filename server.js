@@ -22,7 +22,14 @@ const ENABLE_THINKING_MODE = false;
 const MODEL_MAPPING = {
   'glm-4.7': 'zai-org/GLM-4.7:novita',
 };
-
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'OpenAI to NVIDIA NIM Proxy',
+    reasoning_display: SHOW_REASONING,
+    thinking_mode: ENABLE_THINKING_MODE
+  });
+});
 // List models endpoint
 app.get('/v1/models', (req, res) => {
   const models = Object.keys(MODEL_MAPPING).map(model => ({
